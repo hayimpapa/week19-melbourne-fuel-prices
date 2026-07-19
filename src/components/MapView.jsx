@@ -31,11 +31,14 @@ function FitToResults({ stations, userLocation }) {
     const points = stations.map((s) => [s.latitude, s.longitude])
     if (userLocation) points.push([userLocation.latitude, userLocation.longitude])
     if (points.length === 0) return
+    // animate:false avoids an in-flight zoom animation firing its callback
+    // after the map is unmounted (e.g. toggling to list view), which otherwise
+    // throws a harmless-but-noisy "_leaflet_pos" error.
     if (points.length === 1) {
-      map.setView(points[0], 14)
+      map.setView(points[0], 14, { animate: false })
       return
     }
-    map.fitBounds(L.latLngBounds(points), { padding: [48, 48], maxZoom: 15 })
+    map.fitBounds(L.latLngBounds(points), { padding: [48, 48], maxZoom: 15, animate: false })
   }, [stations, userLocation, map])
   return null
 }
@@ -105,7 +108,8 @@ export default function MapView({ stations, min, max, cheapestId, userLocation, 
                   )}
                 </div>
                 <div className="mt-0.5 text-xs text-gray-500">
-                  {station.address}, {station.suburb}
+                  {station.address}
+                  {station.suburb ? `, ${station.suburb}` : ''}
                 </div>
                 <div className="mt-2 flex items-baseline gap-1">
                   <span className="text-xl font-extrabold tabular-nums text-gray-900">
