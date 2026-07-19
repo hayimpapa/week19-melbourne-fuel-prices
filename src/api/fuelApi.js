@@ -19,7 +19,12 @@
 
 import mockStations from '../data/mockStations.js'
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK_DATA !== 'false'
+// Data source resolution:
+//   - If VITE_USE_MOCK_DATA is set, honour it ('false' => live, anything else => mock).
+//   - Otherwise default to mock during `vite dev` (no serverless function running)
+//     and to the live proxy in a production build.
+const MOCK_FLAG = import.meta.env.VITE_USE_MOCK_DATA
+const USE_MOCK = MOCK_FLAG != null ? MOCK_FLAG !== 'false' : import.meta.env.DEV
 
 /**
  * Fetch service stations with 91 unleaded prices.
@@ -47,23 +52,18 @@ export function getDataAsOf(stations) {
   }, null)
 }
 
-// ---------------------------------------------------------------------------
-// TODO(step 3): wire the real Servo Saver / Service Victoria API here.
-//
-// Waiting on from the project owner:
-//   - Consumer ID (and how it is passed: header? query param? name?)
-//   - Base URL + the exact endpoint for station prices
-//   - Request method + body (GET vs POST, any required geo/bounds params)
-//   - Response JSON shape (station identity, lat/lng, fuel-type coding for U91,
-//     price units, and the freshness/last-updated field)
-//
-// Map that response into the normalised Station shape above and return it.
-// A Supabase Edge Function or serverless proxy will likely be needed to keep
-// the Consumer ID off the client and to handle CORS — TBD once auth is known.
-// ---------------------------------------------------------------------------
+// Live data comes through our own same-origin serverless proxy (api/stations.js),
+// which holds the Service Victoria Consumer ID server-side, joins brand names,
+// and returns the normalised Station shape. The browser never sees the key and
+// there is no CORS to fight because the request is same-origin.
 async function fetchLiveStations() {
-  throw new Error(
-    'Live Servo Saver API not wired up yet. Set VITE_USE_MOCK_DATA=true (default) ' +
-      'or provide the API request format to implement fetchLiveStations().',
-  )
+  const res = await fetch('/api/stations', { headers: { Accept: 'application/json' } })
+  if (!res.ok) {
+    if (res.status === 429) {
+      throw new Error('The fuel price service is busy right now. Please try again in a minute.')
+    }
+    throw new Error('Could not load live fuel prices. Please try again shortly.')
+  }
+  const data = await res.json()
+  return data.stations || []
 }

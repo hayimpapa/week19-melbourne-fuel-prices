@@ -34,28 +34,51 @@ npm run preview    # preview the production build
 
 ## Data source
 
-The app talks to its data through a single seam: [`src/api/fuelApi.js`](src/api/fuelApi.js).
+Live data comes from the **Fair Fuel Open Data API** (Service Victoria). Because
+the API is server-to-server, HTTPS-only, requires a secret Consumer ID, and
+rate-limits to 10 requests / 60s, the browser never calls it directly. Instead:
 
-- **Right now it serves mock Melbourne data** (`src/data/mockStations.js`) so the
-  whole UI — map, list, filters, geolocation — is fully functional offline.
-- The live **Servo Saver (Service Victoria)** API gets wired into
-  `fetchLiveStations()` once the request format is confirmed. Everything else
-  consumes the same normalised `Station` shape, so no UI changes are needed.
-
-Toggle the source with an env var (see [`.env.example`](.env.example)):
-
-```bash
-VITE_USE_MOCK_DATA=true   # default; false once the live API is implemented
+```
+browser  ──►  /api/stations  (Vercel serverless proxy, api/stations.js)  ──►  Fair Fuel API
+                    │
+                    ├─ holds the Consumer ID server-side (never shipped to the client)
+                    ├─ joins brand names (/fuel/reference-data/brands)
+                    ├─ keeps the 91-unleaded (U91) price, filters to Greater Melbourne
+                    └─ CDN-cached 30 min → stays well under the upstream rate limit
 ```
 
-The Consumer ID will be kept off the client via a Supabase Edge Function /
-serverless proxy (also handles CORS) — added in step 3.
+The frontend talks to data through one seam,
+[`src/api/fuelApi.js`](src/api/fuelApi.js), which returns a normalised `Station`
+shape (see [`src/data/mockStations.js`](src/data/mockStations.js)). Mock data of
+the same shape keeps the whole UI working offline.
+
+**Source selection** (see [`.env.example`](.env.example)):
+
+- Unset → **mock during `vite dev`**, **live in a production build** (automatic).
+- `VITE_USE_MOCK_DATA=true` → always mock · `=false` → always live.
+
+### Deploying (Vercel)
+
+Set the Consumer ID as an environment variable in the Vercel project — it is read
+only by the serverless function, never exposed to the browser:
+
+```
+FAIR_FUEL_CONSUMER_ID = <your Service Victoria x-consumer-id>
+```
+
+For live data locally, run `vercel dev` (so `/api/stations` is served) with the
+same var in `.env.local`. Plain `vite dev` uses mock data.
+
+> The Melbourne bounding box lives in `api/stations.js` (`MELBOURNE_BOUNDS`) —
+> widen or remove it to cover more of Victoria.
 
 ## Project layout
 
 ```
+api/
+  stations.js             # Vercel serverless proxy for the Fair Fuel API
 src/
-  api/fuelApi.js          # data seam: mock now, Servo Saver API later
+  api/fuelApi.js          # data seam: mock or live via /api/stations
   data/mockStations.js    # sample Melbourne stations (normalised shape)
   components/              # Header, Footer, Filters, MapView, ListView, StationCard
   hooks/useGeolocation.js # opt-in browser geolocation

@@ -23,7 +23,8 @@ export default function StationCard({ station, min, max, isCheapest, onSelect, a
           )}
         </div>
         <p className="truncate text-sm text-gray-500">
-          {station.address}, {station.suburb}
+          {station.address}
+          {station.suburb ? `, ${station.suburb}` : ''}
         </p>
         <div className="mt-1 flex items-center gap-3 text-xs text-gray-400">
           <span>{station.brand}</span>
